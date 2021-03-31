@@ -7,3 +7,8 @@ Le but et de pouvoir verifier des certificats contenu dans des buffer en mémoir
 On utlise a cette fin le module certChecker.
 
 le main se trouve dans test.c
+
+## TODO
+
+exemple de callback
+test openssl v 1.0
