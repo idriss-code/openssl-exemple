@@ -1,0 +1,6 @@
+.vscode
+.vscode/*
+certDir/*
+/test
+test
+core
