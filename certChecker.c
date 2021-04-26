@@ -21,6 +21,7 @@
 
 #include "certChecker.h"
 
+static int checkCrlIssuer(X509_CRL *xCrl, X509 *xca);
 static X509 *buffTox509Cert(const char *certBuf, int size, int type);
 static X509_CRL *buffTox509Crl(const char *crlBuf, int size, int type);
 static char *asn1_time_to_buff(const ASN1_TIME *time);
@@ -29,7 +30,74 @@ static void printCert(X509 *cert);
 static int check(X509 *x);
 void initStore();
 
-static X509_STORE *x509Store = NULL;
+static X509_STORE *x509Store = NULL; /*!< Store contenant les CA, ROOT et CRL pour verif des CERT */
+
+/**
+ * \fn int checkCrlIssuer(X509_CRL *xCrl, X509 *xca)
+ * \brief chargement d'une CRL ou d'un certificat pour verif la signature de la CRL
+ * \param xCrl {pointeur sur CRL}
+ * \param xca {pointeur sur Certificat}
+ * \return 1 = OK; 0 = KO; -1 = ERROR
+ */
+static int checkCrlIssuer(X509_CRL *xCrl, X509 *xca)
+{
+    EVP_PKEY *pkey = NULL;
+    int ret = 0;
+
+    pkey = X509_get_pubkey(xca);
+
+    if (!pkey) {
+        printf("pb pkey ctx %s %s %d\n",__FILE__, __FUNCTION__, __LINE__);
+        return -1;
+    }
+    ret = X509_CRL_verify(xCrl, pkey);
+    EVP_PKEY_free(pkey);
+
+    return ret;
+}
+
+/**
+ * \fn int checkCrl(const char *crl, int crlSize, int crlType,const char *ca, int caSize, int caType)
+ * \brief chargement d'une CRL ou d'un certificat pour verif la signature de la CRL
+ * \param crl buffer
+ * \param crlSize taille du buffer
+ * \param crlType PEM ou DER
+ * \param ca buffer
+ * \param caSize taille du buffer
+ * \param caType PEM ou DER
+ * \return 1 = OK; 0 = KO; -1 = ERROR
+ */
+int checkCrl(const char *crl, int crlSize, int crlType,const char *ca, int caSize, int caType)
+{
+    X509 *xca = NULL;
+    X509_CRL *xCrl = NULL;
+    int ret = 0;
+
+    xca = buffTox509Cert(ca, caSize, caType);
+    if (xca == NULL)
+    {
+        printf("*** pb chargement Ca ***\n");
+        ret = -1;
+        goto end;
+    }
+
+    xCrl = buffTox509Crl(crl, crlSize, crlType);
+    if (xCrl == NULL)
+    {
+        printf("*** pb chargement Crl ***\n");
+        ret = -1;
+        goto end;
+    }
+
+    ret = checkCrlIssuer(xCrl, xca);
+
+    end:
+    
+    X509_CRL_free(xCrl);
+    X509_free(xca);
+
+    return ret;
+}
 
 /**
  * \fn void initStore()
@@ -90,7 +158,13 @@ void loadCrl(const char *crl, int size, int type)
     {
         printf("*** pb chargement Crl ***\n");
     }
-    X509_STORE_add_crl(x509Store, xCrl);
+
+    // TODO verif crl issuer
+
+    if(!X509_STORE_add_crl(x509Store, xCrl)){
+        printf("*** add crl KO ***\n");
+    };
+    
     X509_CRL_free(xCrl);
 }
 
@@ -237,7 +311,8 @@ static int check(X509 *x)
         goto end;
 
     // voir flag https://www.openssl.org/docs/man1.1.1/man3/X509_VERIFY_PARAM_set_depth.html
-    flags = (X509_V_FLAG_PARTIAL_CHAIN);
+    //flags = (X509_V_FLAG_PARTIAL_CHAIN);
+    flags = 0;
 
 #if OPENSSL_VERSION_NUMBER >= 0x10101000L
     X509_VERIFY_PARAM *param = X509_STORE_CTX_get0_param(ctx);
@@ -286,7 +361,7 @@ static char *asn1_time_to_buff(const ASN1_TIME *time)
  * \fn static char *asn1_time_to_buff(const ASN1_TIME *time)
  * \brief creer un string dans un buffer contenant les usages d'un cert
  * 
- * \param time {pointeur sur certficat}
+ * \param cert {pointeur sur certficat}
  * \return buffer doit etre free
  */
 static char *usages(X509 *cert)
@@ -324,7 +399,7 @@ static char *usages(X509 *cert)
  * \fn static void printCert(X509 *cert)
  * \brief affiche les info d'un certificat
  * 
- * \param time {pointeur sur certficat}
+ * \param cert {pointeur sur certficat}
  */
 static void printCert(X509 *cert)
 {

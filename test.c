@@ -18,10 +18,13 @@ int main()
 
     int ret;
 
-    monCertLen = charger("certpb/os4x_end_consumer.cer",&monCert);
-    monRootLen = charger("certpb/oftp2ca.c-works.net.cer",&monRoot);
-    monCaLen = charger("certpb/rootca.c-works.net.cer",&monCa);
-    crlLen = charger("certpb/cacrl.pem",&crl);
+    monCertLen = charger("certDir/endUser.pem",&monCert);
+    monRootLen = charger("certDir/root.pem",&monRoot);
+    monCaLen = charger("certDir/ca.pem",&monCa);
+    crlLen = charger("certDir/cacrl.pem",&crl);
+
+    if(checkCrl(crl,crlLen,PEM,monCa,monCaLen,PEM) > 0)
+        printf("crl ok");
 
     loadCa(monCa,monCaLen,PEM);
     loadCrl(crl,crlLen,PEM);
